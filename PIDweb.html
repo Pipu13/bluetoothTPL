@@ -50,28 +50,42 @@
     const baseSlider = document.getElementById('baseSlider');
     const baseValue = document.getElementById('baseValue');
 
+    // Check if Web Bluetooth is available
+    if (!navigator.bluetooth) {
+      status.textContent = 'Error: Web Bluetooth API is not available in this browser';
+      connectBtn.disabled = true;
+      console.error('Web Bluetooth API is not supported');
+      return;
+    }
+
     connectBtn.addEventListener('click', async () => {
       if (device && characteristic) {
         // Disconnect
         try {
+          console.log('Disconnecting from device...');
           device.gatt.disconnect();
           resetUI();
         } catch (error) {
           console.error('Disconnection failed:', error);
-          status.textContent = `Error: ${error.message}`;
+          status.textContent = `Disconnection Error: ${error.message}`;
         }
       } else {
         // Connect
         try {
           status.textContent = 'Connecting...';
+          console.log('Requesting Bluetooth device...');
           device = await navigator.bluetooth.requestDevice({
             filters: [{ name: 'LineFollowingRobot' }],
             optionalServices: [serviceUUID]
           });
+          console.log('Device selected:', device.name);
 
           const server = await device.gatt.connect();
+          console.log('GATT server connected');
           const service = await server.getPrimaryService(serviceUUID);
+          console.log('Service found:', serviceUUID);
           characteristic = await service.getCharacteristic(characteristicUUID);
+          console.log('Characteristic found:', characteristicUUID);
 
           status.textContent = 'Connected';
           connectBtn.textContent = 'Disconnect';
@@ -79,11 +93,12 @@
           connectBtn.classList.add('bg-red-500', 'hover:bg-red-600');
 
           device.addEventListener('gattserverdisconnected', () => {
+            console.log('Device disconnected');
             resetUI();
           });
         } catch (error) {
           console.error('Connection failed:', error);
-          status.textContent = `Error: ${error.message}`;
+          status.textContent = `Connection Error: ${error.message}`;
           resetUI();
         }
       }
@@ -116,6 +131,7 @@
     async function sendCommand(command) {
       if (!characteristic) {
         status.textContent = 'Error: Not connected';
+        console.error('Cannot send command: No characteristic available');
         return;
       }
 
@@ -126,7 +142,7 @@
         status.textContent = 'Connected';
       } catch (error) {
         console.error('Failed to send command:', error);
-        status.textContent = `Error: ${error.message}`;
+        status.textContent = `Send Error: ${error.message}`;
       }
     }
 
