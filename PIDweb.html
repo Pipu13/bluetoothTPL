@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PID Tuning for Line Following Robot</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+  <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+    <h1 class="text-2xl font-bold mb-4 text-center">PID Tuning for Line Following Robot</h1>
+    <div id="status" class="text-center mb-4 text-gray-600">Disconnected</div>
+    <button id="connectBtn" class="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 mb-4">Connect to Robot</button>
+    <div class="mb-4">
+      <label for="kpSlider" class="block text-sm font-medium text-gray-700">Kp (0-100):</label>
+      <input type="range" id="kpSlider" min="0" max="100" step="0.1" value="50.0" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+      <div id="kpValue" class="text-center mt-2 text-gray-600">50.0</div>
+    </div>
+    <div class="mb-4">
+      <label for="kiSlider" class="block text-sm font-medium text-gray-700">Ki (0-50):</label>
+      <input type="range" id="kiSlider" min="0" max="50" step="0.1" value="10.0" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+      <div id="kiValue" class="text-center mt-2 text-gray-600">10.0</div>
+    </div>
+    <div class="mb-4">
+      <label for="kdSlider" class="block text-sm font-medium text-gray-700">Kd (0-10):</label>
+      <input type="range" id="kdSlider" min="0" max="10" step="0.1" value="0.5" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+      <div id="kdValue" class="text-center mt-2 text-gray-600">0.5</div>
+    </div>
+    <div class="mb-4">
+      <label for="baseSlider" class="block text-sm font-medium text-gray-700">Base Speed (0-255):</label>
+      <input type="range" id="baseSlider" min="0" max="255" step="1" value="180" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+      <div id="baseValue" class="text-center mt-2 text-gray-600">180</div>
+    </div>
+  </div>
+
+  <script>
+    const serviceUUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+    const characteristicUUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+    let characteristic = null;
+    let device = null;
+
+    const connectBtn = document.getElementById('connectBtn');
+    const status = document.getElementById('status');
+    const kpSlider = document.getElementById('kpSlider');
+    const kpValue = document.getElementById('kpValue');
+    const kiSlider = document.getElementById('kiSlider');
+    const kiValue = document.getElementById('kiValue');
+    const kdSlider = document.getElementById('kdSlider');
+    const kdValue = document.getElementById('kdValue');
+    const baseSlider = document.getElementById('baseSlider');
+    const baseValue = document.getElementById('baseValue');
+
+    connectBtn.addEventListener('click', async () => {
+      if (device && characteristic) {
+        // Disconnect
+        try {
+          device.gatt.disconnect();
+          resetUI();
+        } catch (error) {
+          console.error('Disconnection failed:', error);
+          status.textContent = `Error: ${error.message}`;
+        }
+      } else {
+        // Connect
+        try {
+          status.textContent = 'Connecting...';
+          device = await navigator.bluetooth.requestDevice({
+            filters: [{ name: 'LineFollowingRobot' }],
+            optionalServices: [serviceUUID]
+          });
+
+          const server = await device.gatt.connect();
+          const service = await server.getPrimaryService(serviceUUID);
+          characteristic = await service.getCharacteristic(characteristicUUID);
+
+          status.textContent = 'Connected';
+          connectBtn.textContent = 'Disconnect';
+          connectBtn.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+          connectBtn.classList.add('bg-red-500', 'hover:bg-red-600');
+
+          device.addEventListener('gattserverdisconnected', () => {
+            resetUI();
+          });
+        } catch (error) {
+          console.error('Connection failed:', error);
+          status.textContent = `Error: ${error.message}`;
+          resetUI();
+        }
+      }
+    });
+
+    kpSlider.addEventListener('input', () => {
+      const kp = kpSlider.value;
+      kpValue.textContent = kp;
+      sendCommand(`KP:${kp}`);
+    });
+
+    kiSlider.addEventListener('input', () => {
+      const ki = kiSlider.value;
+      kiValue.textContent = ki;
+      sendCommand(`KI:${ki}`);
+    });
+
+    kdSlider.addEventListener('input', () => {
+      const kd = kdSlider.value;
+      kdValue.textContent = kd;
+      sendCommand(`KD:${kd}`);
+    });
+
+    baseSlider.addEventListener('input', () => {
+      const base = baseSlider.value;
+      baseValue.textContent = base;
+      sendCommand(`BASE:${base}`);
+    });
+
+    async function sendCommand(command) {
+      if (!characteristic) {
+        status.textContent = 'Error: Not connected';
+        return;
+      }
+
+      try {
+        const encoder = new TextEncoder();
+        await characteristic.writeValue(encoder.encode(command));
+        console.log(`Sent: ${command}`);
+        status.textContent = 'Connected';
+      } catch (error) {
+        console.error('Failed to send command:', error);
+        status.textContent = `Error: ${error.message}`;
+      }
+    }
+
+    function resetUI() {
+      status.textContent = 'Disconnected';
+      connectBtn.textContent = 'Connect to Robot';
+      connectBtn.classList.remove('bg-red-500', 'hover:bg-red-600');
+      connectBtn.classList.add('bg-blue-500', 'hover:bg-blue-600');
+      kpSlider.value = 50.0;
+      kpValue.textContent = '50.0';
+      kiSlider.value = 10.0;
+      kiValue.textContent = '10.0';
+      kdSlider.value = 0.5;
+      kdValue.textContent = '0.5';
+      baseSlider.value = 180;
+      baseValue.textContent = '180';
+      characteristic = null;
+      device = null;
+    }
+  </script>
+</body>
+</html>
